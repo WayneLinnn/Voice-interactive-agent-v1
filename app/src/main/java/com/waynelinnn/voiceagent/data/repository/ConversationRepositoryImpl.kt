@@ -37,6 +37,17 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun appendMessage(sessionId: Long, message: ChatMessage): Long =
         chatDao.appendMessageAndTouch(message.copy(sessionId = sessionId).toEntity())
 
+    override suspend fun updateSessionTitle(sessionId: Long, title: String) {
+        chatDao.updateSessionTitle(
+            sessionId = sessionId,
+            title = title,
+            updatedAtEpochMs = System.currentTimeMillis(),
+        )
+    }
+
+    override suspend fun getSession(sessionId: Long): ChatSession? =
+        chatDao.getSession(sessionId)?.toDomain()
+
     override suspend fun deleteSession(sessionId: Long) {
         chatDao.deleteSession(sessionId)
     }

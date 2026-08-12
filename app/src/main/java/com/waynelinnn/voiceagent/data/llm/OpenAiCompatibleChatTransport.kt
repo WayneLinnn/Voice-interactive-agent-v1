@@ -1,15 +1,12 @@
-package com.waynelinnn.voiceagent.data.remote.openai
+package com.waynelinnn.voiceagent.data.llm
 
 import com.squareup.moshi.Moshi
-import com.waynelinnn.voiceagent.data.remote.ApiKeyProvider
-import com.waynelinnn.voiceagent.data.remote.NetworkConfig
 import com.waynelinnn.voiceagent.data.remote.api.ChatCompletionChunkDto
 import com.waynelinnn.voiceagent.data.remote.api.ChatCompletionRequestDto
 import com.waynelinnn.voiceagent.data.remote.api.ChatMessageDto
 import com.waynelinnn.voiceagent.data.remote.stream.SseStreamClient
-import com.waynelinnn.voiceagent.domain.llm.LlmClient
+import com.waynelinnn.voiceagent.domain.llm.LlmProvider
 import com.waynelinnn.voiceagent.domain.model.LlmChatRequest
-import com.waynelinnn.voiceagent.domain.model.LlmProviderId
 import com.waynelinnn.voiceagent.domain.model.LlmStreamEvent
 import com.waynelinnn.voiceagent.domain.model.MessageRole
 import javax.inject.Inject
@@ -21,31 +18,22 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * OpenAI Chat Completions SSE client (gpt-4o-mini / gpt-4o, …).
+ * Shared OpenAI-compatible Chat Completions SSE transport.
+ * Vendor-specific URL/key/model lists live in provider files — not here.
  */
 @Singleton
-class OpenAiLlmClient @Inject constructor(
-    private val apiKeyProvider: ApiKeyProvider,
-    private val moshi: Moshi,
+class OpenAiCompatibleChatTransport @Inject constructor(
+    moshi: Moshi,
     private val sseStreamClient: SseStreamClient,
-) : LlmClient {
-
-    override val providerId: String = LlmProviderId.OpenAI.id
-
+) {
     private val requestAdapter = moshi.adapter(ChatCompletionRequestDto::class.java)
     private val chunkAdapter = moshi.adapter(ChatCompletionChunkDto::class.java)
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    override fun streamChat(request: LlmChatRequest): Flow<LlmStreamEvent> {
-        val apiKey = apiKeyProvider.getApiKey()
+    fun streamChat(provider: LlmProvider, request: LlmChatRequest): Flow<LlmStreamEvent> {
+        val apiKey = provider.apiKey()
         if (apiKey.isNullOrBlank()) {
-            return flow {
-                emit(
-                    LlmStreamEvent.Error(
-                        "OpenAI API key missing. Set OPENAI_API_KEY in project-root .env and rebuild.",
-                    ),
-                )
-            }
+            return flow { emit(LlmStreamEvent.Error(provider.missingKeyMessage())) }
         }
 
         val bodyDto = ChatCompletionRequestDto(
@@ -60,8 +48,9 @@ class OpenAiLlmClient @Inject constructor(
         )
         val json = requestAdapter.toJson(bodyDto)
         val httpRequest = Request.Builder()
-            .url(NetworkConfig.DEFAULT_BASE_URL + NetworkConfig.CHAT_COMPLETIONS_PATH)
+            .url(provider.baseUrl + provider.chatCompletionsPath)
             .header("Accept", "text/event-stream")
+            .header("Authorization", "Bearer $apiKey")
             .post(json.toRequestBody(jsonMediaType))
             .build()
 

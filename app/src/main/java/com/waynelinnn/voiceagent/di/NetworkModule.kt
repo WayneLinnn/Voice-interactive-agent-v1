@@ -7,12 +7,10 @@ import com.waynelinnn.voiceagent.data.remote.AuthInterceptor
 import com.waynelinnn.voiceagent.data.remote.BuildConfigApiKeyProvider
 import com.waynelinnn.voiceagent.data.remote.NetworkConfig
 import com.waynelinnn.voiceagent.data.remote.api.LlmApi
-import com.waynelinnn.voiceagent.data.remote.openai.OpenAiLlmClient
 import com.waynelinnn.voiceagent.data.remote.stream.NoOpWebSocketStreamClient
 import com.waynelinnn.voiceagent.data.remote.stream.SseStreamClient
 import com.waynelinnn.voiceagent.data.remote.stream.WebSocketStreamClient
 import com.waynelinnn.voiceagent.data.repository.LlmRepositoryImpl
-import com.waynelinnn.voiceagent.domain.llm.LlmClient
 import com.waynelinnn.voiceagent.domain.repository.LlmRepository
 import dagger.Binds
 import dagger.Module
@@ -82,12 +80,6 @@ abstract class NetworkBindModule {
     abstract fun bindApiKeyProvider(
         impl: BuildConfigApiKeyProvider,
     ): ApiKeyProvider
-
-    @Binds
-    @Singleton
-    abstract fun bindLlmClient(
-        impl: OpenAiLlmClient,
-    ): LlmClient
 
     @Binds
     @Singleton

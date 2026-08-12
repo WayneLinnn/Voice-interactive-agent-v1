@@ -16,7 +16,8 @@ data class LlmModelOption(
 )
 
 /**
- * Static catalog. Only OpenAI chat models are wired today; others stay as future slots.
+ * Static catalog. OpenAI + DeepSeek are wired via RoutingLlmClient providers.
+ * Selectability also requires a provider API key at runtime (see settings UI).
  */
 object LlmModelCatalog {
     val models: List<LlmModelOption> = listOf(
@@ -52,8 +53,8 @@ object LlmModelCatalog {
             id = "deepseek-chat",
             displayName = "DeepSeek Chat",
             provider = LlmProviderId.DeepSeek,
-            enabled = false,
-            tags = listOf("coming"),
+            enabled = true,
+            tags = listOf("cn", "value"),
         ),
     )
 
@@ -64,4 +65,12 @@ object LlmModelCatalog {
     fun find(modelId: String): LlmModelOption? = models.firstOrNull { it.id == modelId }
 
     fun isSelectable(modelId: String): Boolean = find(modelId)?.enabled == true
+
+    fun isSelectable(modelId: String, hasProviderKey: (String) -> Boolean): Boolean {
+        val model = find(modelId) ?: return false
+        return model.enabled && hasProviderKey(model.provider.id)
+    }
+
+    fun firstSelectableId(hasProviderKey: (String) -> Boolean): String? =
+        models.firstOrNull { it.enabled && hasProviderKey(it.provider.id) }?.id
 }

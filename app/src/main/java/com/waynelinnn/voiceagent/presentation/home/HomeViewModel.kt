@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
-    val title: String = "Voice Agent",
+    val title: String = "Quantis",
     val defaultModelId: String = AppSettings.DEFAULT_MODEL_ID,
     val defaultModelLabel: String = "GPT-4o mini",
     val hasOpenAiKey: Boolean = false,

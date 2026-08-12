@@ -9,4 +9,6 @@ interface SettingsRepository {
     suspend fun setDefaultModelId(modelId: String)
     suspend fun setSpeechLanguage(language: SpeechLanguage)
     suspend fun setVoiceId(voiceId: String)
+    suspend fun setSpeechRate(rate: Float)
+    suspend fun setWakeWordEnabled(enabled: Boolean)
 }

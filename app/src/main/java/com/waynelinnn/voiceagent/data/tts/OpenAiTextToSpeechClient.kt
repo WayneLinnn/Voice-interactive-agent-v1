@@ -10,6 +10,8 @@ import com.waynelinnn.voiceagent.data.remote.NetworkConfig
 import com.waynelinnn.voiceagent.data.remote.openai.OpenAiSpeechRequestDto
 import com.waynelinnn.voiceagent.domain.model.SpeechLanguage
 import com.waynelinnn.voiceagent.domain.model.TtsEvent
+import com.waynelinnn.voiceagent.domain.model.TtsVoiceOption
+import com.waynelinnn.voiceagent.domain.repository.SettingsRepository
 import com.waynelinnn.voiceagent.domain.tts.TextToSpeechClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -25,8 +27,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,6 +47,7 @@ class OpenAiTextToSpeechClient @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
     private val apiKeyProvider: ApiKeyProvider,
+    private val settingsRepository: SettingsRepository,
     moshi: Moshi,
 ) : TextToSpeechClient {
 
@@ -79,7 +86,8 @@ class OpenAiTextToSpeechClient @Inject constructor(
 
         speakJob = scope.launch {
             try {
-                val audioBytes = fetchSpeechMp3(trimmed, language)
+                val settings = settingsRepository.settings.first()
+                val audioBytes = fetchSpeechMp3(trimmed, language, settings.voiceId, settings.speechRate)
                 if (gen != generation.get()) return@launch
                 playMp3(audioBytes, gen)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -113,12 +121,20 @@ class OpenAiTextToSpeechClient @Inject constructor(
         runCatching { if (cacheFile.exists()) cacheFile.delete() }
     }
 
-    private fun fetchSpeechMp3(text: String, language: SpeechLanguage): ByteArray {
+    private fun fetchSpeechMp3(
+        text: String,
+        language: SpeechLanguage,
+        voiceId: String,
+        speechRate: Float,
+    ): ByteArray {
+        val configuredVoice = voiceId
+            .takeIf { id -> TtsVoiceOption.entries.any { it.id == id } }
         val bodyDto = OpenAiSpeechRequestDto(
             model = MODEL,
             input = text.take(MAX_INPUT_CHARS),
-            voice = voiceFor(language, text),
+            voice = configuredVoice ?: voiceFor(language, text),
             responseFormat = "mp3",
+            speed = speechRate.toDouble().coerceIn(0.25, 4.0),
         )
         val json = requestAdapter.toJson(bodyDto)
         val request = Request.Builder()
@@ -166,14 +182,27 @@ class OpenAiTextToSpeechClient @Inject constructor(
                 releasePlayer(emitCompleted = false)
                 true
             }
-            player.prepare()
-            if (gen != generation.get()) {
-                releasePlayer(emitCompleted = false)
-                return@withContext
+            kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                player.setOnPreparedListener {
+                    if (gen != generation.get()) {
+                        releasePlayer(emitCompleted = false)
+                        if (cont.isActive) cont.resume(Unit)
+                        return@setOnPreparedListener
+                    }
+                    playing.set(true)
+                    _events.tryEmit(TtsEvent.Started)
+                    player.start()
+                    if (cont.isActive) cont.resume(Unit)
+                }
+                cont.invokeOnCancellation {
+                    releasePlayer(emitCompleted = false)
+                }
+                try {
+                    player.prepareAsync()
+                } catch (error: Exception) {
+                    if (cont.isActive) cont.resumeWithException(error)
+                }
             }
-            playing.set(true)
-            _events.tryEmit(TtsEvent.Started)
-            player.start()
         }
     }
 

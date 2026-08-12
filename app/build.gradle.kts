@@ -40,6 +40,10 @@ val openAiApiKey: String =
     localEnv["OPENAI_API_KEY"]
         ?: localSecrets.getProperty("OPENAI_API_KEY")
         ?: ""
+val deepSeekApiKey: String =
+    localEnv["DEEPSEEK_API_KEY"]
+        ?: localSecrets.getProperty("DEEPSEEK_API_KEY")
+        ?: ""
 
 android {
     namespace = "com.waynelinnn.voiceagent"
@@ -57,6 +61,11 @@ android {
             "String",
             "OPENAI_API_KEY",
             "\"${escapeBuildConfigString(openAiApiKey)}\"",
+        )
+        buildConfigField(
+            "String",
+            "DEEPSEEK_API_KEY",
+            "\"${escapeBuildConfigString(deepSeekApiKey)}\"",
         )
     }
 

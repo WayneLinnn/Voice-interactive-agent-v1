@@ -33,7 +33,8 @@ class SherpaSpeechToTextClient @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val active = AtomicBoolean(false)
     private val bufferLock = Any()
-    private val pcmBuffer = ArrayList<Short>()
+    private var pcmData = ShortArray(AudioCaptureConfig.SAMPLE_RATE_HZ)
+    private var pcmSize = 0
     private val initMutex = Mutex()
 
     @Volatile private var recognizer: OfflineRecognizer? = null
@@ -45,7 +46,7 @@ class SherpaSpeechToTextClient @Inject constructor(
 
     override fun start(language: SpeechLanguage) {
         this.language = language
-        synchronized(bufferLock) { pcmBuffer.clear() }
+        synchronized(bufferLock) { pcmSize = 0 }
         active.set(true)
         scope.launch {
             val ready = ensureRecognizer()
@@ -67,20 +68,19 @@ class SherpaSpeechToTextClient @Inject constructor(
     override fun feedPcm16(frame: ShortArray) {
         if (!active.get() || frame.isEmpty()) return
         synchronized(bufferLock) {
-            // Cap ~20s to avoid OOM on long noise bursts.
             val maxSamples = AudioCaptureConfig.SAMPLE_RATE_HZ * 20
-            if (pcmBuffer.size < maxSamples) {
-                for (sample in frame) {
-                    pcmBuffer.add(sample)
-                    if (pcmBuffer.size >= maxSamples) break
-                }
-            }
+            val room = maxSamples - pcmSize
+            if (room <= 0) return
+            val toCopy = minOf(frame.size, room)
+            ensurePcmCapacity(pcmSize + toCopy)
+            System.arraycopy(frame, 0, pcmData, pcmSize, toCopy)
+            pcmSize += toCopy
         }
     }
 
     override fun notifySpeechStarted() {
         if (!active.get()) return
-        synchronized(bufferLock) { pcmBuffer.clear() }
+        synchronized(bufferLock) { pcmSize = 0 }
         _transcripts.tryEmit(TranscriptEvent.Partial(text = "…", languageHint = language.code))
     }
 
@@ -88,8 +88,8 @@ class SherpaSpeechToTextClient @Inject constructor(
         if (!active.get()) return
         val samples: ShortArray
         synchronized(bufferLock) {
-            samples = pcmBuffer.toShortArray()
-            pcmBuffer.clear()
+            samples = pcmData.copyOf(pcmSize)
+            pcmSize = 0
         }
         if (samples.isEmpty()) return
         scope.launch {
@@ -99,7 +99,14 @@ class SherpaSpeechToTextClient @Inject constructor(
 
     override fun stop() {
         active.set(false)
-        synchronized(bufferLock) { pcmBuffer.clear() }
+        synchronized(bufferLock) { pcmSize = 0 }
+    }
+
+    private fun ensurePcmCapacity(needed: Int) {
+        if (pcmData.size >= needed) return
+        var cap = pcmData.size.coerceAtLeast(AudioCaptureConfig.SAMPLE_RATE_HZ)
+        while (cap < needed) cap *= 2
+        pcmData = pcmData.copyOf(cap)
     }
 
     private suspend fun ensureRecognizer(): Boolean = initMutex.withLock {

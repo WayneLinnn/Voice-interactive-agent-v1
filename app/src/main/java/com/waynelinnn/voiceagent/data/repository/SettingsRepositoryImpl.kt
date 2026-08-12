@@ -25,4 +25,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setVoiceId(voiceId: String) {
         settingsDataStore.setVoiceId(voiceId)
     }
+
+    override suspend fun setSpeechRate(rate: Float) {
+        settingsDataStore.setSpeechRate(rate)
+    }
+
+    override suspend fun setWakeWordEnabled(enabled: Boolean) {
+        settingsDataStore.setWakeWordEnabled(enabled)
+    }
 }

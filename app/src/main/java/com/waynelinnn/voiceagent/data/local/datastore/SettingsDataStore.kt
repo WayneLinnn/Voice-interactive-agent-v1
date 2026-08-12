@@ -3,7 +3,9 @@ package com.waynelinnn.voiceagent.data.local.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.waynelinnn.voiceagent.domain.model.AppSettings
@@ -31,6 +33,8 @@ class SettingsDataStore @Inject constructor(
                 ?.let { runCatching { SpeechLanguage.valueOf(it) }.getOrNull() }
                 ?: SpeechLanguage.Auto,
             voiceId = prefs[Keys.VOICE_ID] ?: AppSettings.DEFAULT_VOICE_ID,
+            speechRate = prefs[Keys.SPEECH_RATE] ?: AppSettings.DEFAULT_SPEECH_RATE,
+            wakeWordEnabled = prefs[Keys.WAKE_WORD_ENABLED] ?: false,
         )
     }
 
@@ -46,9 +50,19 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[Keys.VOICE_ID] = voiceId }
     }
 
+    suspend fun setSpeechRate(rate: Float) {
+        dataStore.edit { it[Keys.SPEECH_RATE] = rate }
+    }
+
+    suspend fun setWakeWordEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.WAKE_WORD_ENABLED] = enabled }
+    }
+
     private object Keys {
         val DEFAULT_MODEL_ID = stringPreferencesKey("default_model_id")
         val SPEECH_LANGUAGE = stringPreferencesKey("speech_language")
         val VOICE_ID = stringPreferencesKey("voice_id")
+        val SPEECH_RATE = floatPreferencesKey("speech_rate")
+        val WAKE_WORD_ENABLED = booleanPreferencesKey("wake_word_enabled")
     }
 }

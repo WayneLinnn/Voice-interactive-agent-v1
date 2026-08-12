@@ -12,8 +12,10 @@ sealed interface VadEvent {
 class EnergyVad(
     private val startThreshold: Double = 1_200.0,
     private val endThreshold: Double = 700.0,
-    private val startFrames: Int = 3, // ~96 ms
-    private val endFrames: Int = 18, // ~576 ms silence
+    /** ~64 ms — snappier barge-in / utterance start. */
+    private val startFrames: Int = 2,
+    /** ~320 ms silence — faster end→STT→LLM handoff (was ~576 ms). */
+    private val endFrames: Int = 10,
     private val onEvent: (VadEvent) -> Unit,
 ) {
     private var inSpeech = false

@@ -7,4 +7,5 @@ data class OpenAiSpeechRequestDto(
     val input: String,
     val voice: String,
     @Json(name = "response_format") val responseFormat: String = "mp3",
+    val speed: Double = 1.0,
 )

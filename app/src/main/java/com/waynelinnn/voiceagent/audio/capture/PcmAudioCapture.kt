@@ -10,6 +10,7 @@ import kotlin.concurrent.thread
 
 /**
  * Captures mono PCM16 @ 16 kHz frames for downstream VAD/STT.
+ * Uses ping-pong buffers to avoid per-frame allocations on the hot path.
  */
 class PcmAudioCapture(
     private val onFrame: (ShortArray) -> Unit,
@@ -63,17 +64,18 @@ class PcmAudioCapture(
         recorder.startRecording()
 
         recordThread = thread(name = "pcm-audio-capture", priority = Thread.MAX_PRIORITY) {
-            val frame = ShortArray(AudioCaptureConfig.FRAME_SAMPLES)
+            val bufA = ShortArray(AudioCaptureConfig.FRAME_SAMPLES)
+            val bufB = ShortArray(AudioCaptureConfig.FRAME_SAMPLES)
+            var useA = true
             try {
                 while (running.get()) {
+                    val frame = if (useA) bufA else bufB
                     val read = recorder.read(frame, 0, frame.size)
-                    if (read > 0) {
-                        val copy = if (read == frame.size) {
-                            frame.copyOf()
-                        } else {
-                            frame.copyOf(read)
-                        }
-                        onFrame(copy)
+                    if (read == frame.size) {
+                        onFrame(frame)
+                        useA = !useA
+                    } else if (read > 0) {
+                        onFrame(frame.copyOf(read))
                     } else if (read < 0) {
                         onError(IllegalStateException("AudioRecord read failed: $read"))
                         break

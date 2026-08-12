@@ -24,6 +24,18 @@ interface ChatDao {
     @Query("UPDATE chat_sessions SET updatedAtEpochMs = :updatedAtEpochMs WHERE id = :sessionId")
     suspend fun touchSession(sessionId: Long, updatedAtEpochMs: Long)
 
+    @Query(
+        """
+        UPDATE chat_sessions
+        SET title = :title, updatedAtEpochMs = :updatedAtEpochMs
+        WHERE id = :sessionId
+        """,
+    )
+    suspend fun updateSessionTitle(sessionId: Long, title: String, updatedAtEpochMs: Long)
+
+    @Query("SELECT * FROM chat_sessions WHERE id = :sessionId LIMIT 1")
+    suspend fun getSession(sessionId: Long): ChatSessionEntity?
+
     @Query("DELETE FROM chat_sessions WHERE id = :sessionId")
     suspend fun deleteSession(sessionId: Long)
 
